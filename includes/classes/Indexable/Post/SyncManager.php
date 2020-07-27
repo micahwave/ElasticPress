@@ -155,14 +155,6 @@ class SyncManager extends SyncManagerAbstract {
 			return;
 		}
 
-		/**
-		 * Fires before post deletion
-		 *
-		 * @hook ep_delete_post
-		 * @param  {int} $post_id ID of post
-		 */
-		do_action( 'ep_delete_post', $post_id );
-
 		Indexables::factory()->get( 'post' )->delete( $post_id, false );
 	}
 
