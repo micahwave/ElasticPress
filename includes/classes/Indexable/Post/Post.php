@@ -757,6 +757,14 @@ class Post extends Indexable {
 			);
 		}
 
+		if ( isset( $args['post_tag'] ) && ! empty( $args['post_tag'] ) ) {
+			$args['tax_query'][] = array(
+				'taxonomy' => 'post_tag',
+				'terms'    => array( $args['post_tag'] ),
+				'field'    => 'slug',
+			);
+		}
+
 		$has_tag__and = false;
 
 		if ( isset( $args['tag__and'] ) && ! empty( $args['tag__and'] ) ) {
@@ -777,8 +785,8 @@ class Post extends Indexable {
 			if ( $has_tag__and ) {
 
 				$args['tax_query'] = array_map(
-					function( $tax_query ) {
-						if ( 'post_tag' === $tax_query ) {
+					function( $tax_query ) use ( $args ) {
+						if ( isset( $tax_query['taxonomy'] ) && 'post_tag' === $tax_query['taxonomy'] && ! in_array( $args['tag_id'], $tax_query['terms'] ) ) {
 							$tax_query['terms'][] = $args['tag_id'];
 						}
 
@@ -786,7 +794,6 @@ class Post extends Indexable {
 					},
 					$args['tax_query']
 				);
-
 			} else {
 				$args['tax_query'][] = array(
 					'taxonomy' => 'post_tag',
@@ -799,19 +806,20 @@ class Post extends Indexable {
 		/**
 		 * Try to find other taxonomies set in the root of WP_Query
 		 *
-		 * @since  3.4
+		 * @since 3.4
+		 * @since 3.4.2 Test taxonomies with their query_var value.
 		 */
-		$taxonomies = get_taxonomies();
+		$taxonomies = get_taxonomies( array(), 'objects' );
 
-		foreach ( $taxonomies as $tax_slug ) {
+		foreach ( $taxonomies as $tax_slug => $tax ) {
 			if ( 'ep_custom_result' === $tax_slug || $this->is_protected_parameter( $tax_slug ) ) {
 				continue;
 			}
 
-			if ( ! empty( $args[ $tax_slug ] ) ) {
+			if ( $tax->query_var && ! empty( $args[ $tax->query_var ] ) ) {
 				$args['tax_query'][] = array(
 					'taxonomy' => $tax_slug,
-					'terms'    => (array) $args[ $tax_slug ],
+					'terms'    => (array) $args[ $tax->query_var ],
 					'field'    => 'slug',
 				);
 			}
@@ -1189,9 +1197,22 @@ class Post extends Indexable {
 		$sticky_posts = get_option( 'sticky_posts' );
 		$sticky_posts = ( is_array( $sticky_posts ) && empty( $sticky_posts ) ) ? false : $sticky_posts;
 
+		/**
+		 * Filter whether to enable sticky posts for this request
+		 *
+		 * @hook ep_enable_sticky_posts
+		 *
+		 * @param {bool}  $allow          Allow sticky posts for this request
+		 * @param {array} $args           Query variables
+		 * @param {array} $formatted_args EP formatted args
+		 *
+		 * @return  {bool} $allow
+		 */
+		$enable_sticky_posts = apply_filters( 'ep_enable_sticky_posts', is_home(), $args, $formatted_args );
+
 		if ( false !== $sticky_posts
-			&& is_home()
-			&& in_array( $args['ignore_sticky_posts'], array( 'false', 0 ), true ) ) {
+			&& $enable_sticky_posts
+			&& in_array( $args['ignore_sticky_posts'], array( 'false', 0, false ), true ) ) {
 			$new_sort = [
 				[
 					'_score' => [
@@ -1325,7 +1346,7 @@ class Post extends Indexable {
 			switch ( $args['fields'] ) {
 				case 'ids':
 					$formatted_args['_source'] = array(
-						'include' => array(
+						'includes' => array(
 							'post_id',
 						),
 					);
@@ -1333,7 +1354,7 @@ class Post extends Indexable {
 
 				case 'id=>parent':
 					$formatted_args['_source'] = array(
-						'include' => array(
+						'includes' => array(
 							'post_id',
 							'post_parent',
 						),
@@ -1387,10 +1408,6 @@ class Post extends Indexable {
 		 * @return  {array} New query
 		 */
 		$formatted_args = apply_filters( 'ep_post_formatted_args', $formatted_args, $args, $wp_query );
-
-		// TOOD remove these.
-		// echo PHP_EOL;
-		// echo wp_json_encode( $formatted_args );
 
 		return $formatted_args;
 	}
@@ -1545,9 +1562,13 @@ class Post extends Indexable {
 	 * @return string The sanitized 'order' query variable.
 	 */
 	protected function parse_order( $order ) {
+		// Core will always set sort order to DESC for any invalid value,
+		// so we can't do any automated testing of this function.
+		// @codeCoverageIgnoreStart
 		if ( ! is_string( $order ) || empty( $order ) ) {
 			return 'desc';
 		}
+		// @codeCoverageIgnoreEnd
 
 		if ( 'ASC' === strtoupper( $order ) ) {
 			return 'asc';
