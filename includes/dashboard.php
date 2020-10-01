@@ -27,11 +27,13 @@ if ( ! defined( 'ABSPATH' ) ) {
  * @since  2.1
  */
 function setup() {
-	if ( defined( 'EP_IS_NETWORK' ) && EP_IS_NETWORK ) { // Must be network admin in multisite.
-		add_action( 'network_admin_menu', __NAMESPACE__ . '\action_admin_menu' );
-		add_action( 'admin_bar_menu', __NAMESPACE__ . '\action_network_admin_bar_menu', 50 );
-	} else {
-		add_action( 'admin_menu', __NAMESPACE__ . '\action_admin_menu' );
+	if ( defined( 'VIP_EP_SHOW_MENU_LINKS' ) && VIP_EP_SHOW_MENU_LINKS ) {
+		if ( defined( 'EP_IS_NETWORK' ) && EP_IS_NETWORK ) { // Must be network admin in multisite.
+			add_action( 'network_admin_menu', __NAMESPACE__ . '\action_admin_menu' );
+			add_action( 'admin_bar_menu', __NAMESPACE__ . '\action_network_admin_bar_menu', 50 );
+		} else {
+			add_action( 'admin_menu', __NAMESPACE__ . '\action_admin_menu' );
+		}
 	}
 
 	add_action( 'wp_ajax_ep_save_feature', __NAMESPACE__ . '\action_wp_ajax_ep_save_feature' );
